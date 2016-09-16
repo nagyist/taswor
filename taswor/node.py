@@ -6,4 +6,7 @@ class Node:
         self.init_generator = init_generator
 
     def resolve(self, *args, **kwargs):
-        pass
+        return self.func(*args, **kwargs)
+
+    def __repr__(self):
+        return "<Node {} func={}>".format(self.name, self.func)

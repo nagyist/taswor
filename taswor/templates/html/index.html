@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Report Visualisation</title>
+
+    <script src="static/jquery.min.js"></script>
+    <script src="static/arbor.js"></script>
+    <script src="static/graphics.js"></script>
+    <script src="static/renderer.js"></script>
+    <script src="data.json"></script>
+</head>
+<body>
+
+<canvas id="viewport" width="800" height="600"></canvas>
+
+<script>
+
+    $("#viewport").attr("width", window.innerWidth * 0.9);
+    $("#viewport").attr("height", window.innerHeight * 0.9);
+
+    var sys = arbor.ParticleSystem(1, 400, 1);
+    sys.parameters({gravity: false});
+
+    sys.renderer = Renderer("#viewport");
+
+//    var data = {
+//        nodes: {
+//            animals: {'color': 'red', 'shape': 'box', 'label': 'Animals'},
+//            dog: {'color': 'green', 'shape': 'box', 'label': 'dog'},
+//            cat: {'color': 'blue', 'shape': 'box', 'label': 'cat'}
+//        },
+//        edges: {
+//            animals: {dog: {}, cat: {}}
+//        }
+//    };
+    sys.graft(data);
+
+    $("#viewport").mousedown(function (e) {
+        var pos = $(this).offset();
+        var p = {x: e.pageX - pos.left, y: e.pageY - pos.top};
+        selected = nearest = dragged = sys.nearest(p);
+
+        if (selected.node !== null) {
+            console.log(selected.node.name);
+        }
+        return false;
+    });
+
+
+</script>
+
+</body>
+</html>

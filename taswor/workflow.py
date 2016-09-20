@@ -1,7 +1,8 @@
 import os
 import sys
+import json
+import shutil
 from multiprocessing import Queue, Event, Process, RLock, Manager
-import logging
 import time
 
 pass
@@ -9,7 +10,6 @@ pass
 from taswor.util import Next, get_logger
 from taswor.node import Node
 from taswor.process.worker import worker_run
-from taswor.process.event_manager import event_manager_run
 
 
 class Workflow:
@@ -20,10 +20,8 @@ class Workflow:
         self.is_idle = [Event() for _ in range(workers)]
         self.logger = get_logger("WorkflowMain")
 
-        self.logger.info("Starting EventManager")
-        self.event_message_queue = Queue()
-        self.event_manager = Process(target=event_manager_run, args=(self.event_message_queue,))
-        self.event_manager.start()
+        self.manager = Manager()
+        self.events = self.manager.list()
 
         if not cache_url:
             self.logger.warning("No cache backend supplied. Results will not be cached and may have a serious "
@@ -34,14 +32,14 @@ class Workflow:
         self.logger.info("Starting workers")
         self.workers = [
             Process(target=worker_run,
-                    args=(self.is_idle[i], self.queue, self.queue_lock, self.event_message_queue, self.nodes),
+                    args=(self.is_idle[i], self.queue, self.queue_lock, self.nodes, self.events),
                     name="worker-{}".format(i))
             for i in range(workers)]
 
         for worker in self.workers:
             worker.start()
 
-    def process(self):
+    def start(self, wait=False):
         start_nodes = self._get_start_nodes()
 
         for node in start_nodes:
@@ -51,16 +49,56 @@ class Workflow:
                 for args, kwargs in node.init_generator:
                     self.queue.put((node, args, kwargs))
 
+        if wait:
+            self.wait_for_completion()
+
+    def close(self):
+        self.logger.info("Closing all workers")
+        for worker in self.workers:
+            worker.terminate()
+            worker.join()
+
+        self.logger.info("All workers killed")
+
+        self.logger.info("Terminating")
+
+    def wait_for_completion(self):
+        self.logger.debug("Waiting for completion")
         finished = False
         while not finished:
             if self._all_workers_are_idle():
-                self.logger.info("Terminating")
+                self.logger.info("Finished")
                 finished = True
-                for worker in self.workers:
-                    worker.terminate()
-                    worker.join()
 
-                self.event_manager.terminate()
+    def dump_result_as_json(self, filename):
+        import json
+        with open(filename, "w") as out:
+            data = {"raport": [x.to_dict() for x in self.events]}
+            json.dump(data, out, indent=4, sort_keys=True)
+
+    def dump_result_as_html(self, directory):
+        template_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", "html")
+        shutil.copytree(template_dir, directory)
+
+        def get_node(event):
+            name = event.from_node
+            label = name + " (" + repr(event.args) + "," + repr(event.kwargs) + ")"
+            color = "green" if not event.error else "red"
+
+            return label, {"shape": "box", "label": label, "color": color}
+
+        data = {
+            "nodes": {},
+            "edges": {}
+        }
+        for event in self.events:
+            node_name, attrs = get_node(event)
+            data["nodes"][node_name] = attrs
+
+        with open(os.path.join(directory, "data.json"), "w") as data_json:
+            data_json.write("data=")
+            data_json.write(json.dumps(data))
+            data_json.write(";")
 
     def _get_start_nodes(self):
         return [node for node in self.nodes if node.start]
@@ -108,4 +146,8 @@ if __name__ == '__main__':
         test.node, test2.node, test3.node,
         workers=4
     )
-    workflow.process()
+
+    workflow.start()
+    workflow.wait_for_completion()
+    workflow.dump_result_as_html("test")
+    workflow.close()

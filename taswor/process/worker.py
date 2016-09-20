@@ -1,23 +1,53 @@
 import multiprocessing
 import os
 import time
+from collections import namedtuple
 
 from taswor.util import get_logger
 from taswor.util import Next
-from taswor.process.event_manager import NodeProcessed
 
 
 def worker_run(*args, **kwargs):
     Worker(*args, **kwargs).start()
 
 
+class NodeProcessed:
+    def __init__(self, from_node, args, kwargs, result, duration, error):
+        self.from_node = from_node
+        self.args = args
+        self.kwargs = kwargs
+        self.result = result
+        self.duration = duration
+        self.error = error
+
+    def to_dict(self):
+        to_return = {
+            "from": self.from_node,
+            "to": [],
+            "args": self.args,
+            "kwargs": self.kwargs,
+            "duration": self.duration,
+            "error": self.error
+        }
+        if self.result is None:
+            to_return["to"] = None
+            return to_return
+        elif not isinstance(self.result, list):
+            self.result = [self.result]
+
+        for item in self.result:
+            to_return["to"].append({"name": item.node_name, "args": item.args, "kwargs": item.kwargs})
+
+        return to_return
+
+
 class Worker:
-    def __init__(self, is_idle_event, queue, queue_lock, event_message_queue, nodes):
+    def __init__(self, is_idle_event, queue, queue_lock, nodes, event_list):
         self.is_idle_event = is_idle_event
         self.queue = queue
         self.queue_lock = queue_lock
-        self.event_mesage_queue = event_message_queue
         self.nodes = nodes
+        self.events = event_list
 
         self.worker_process = multiprocessing.current_process()
         self.logger = get_logger("Worker ".format(self.worker_process.name))
@@ -45,8 +75,8 @@ class Worker:
         except Exception as e:
             self.logger.error("Node {} raised an exception: {}".format(node, e))
             self.logger.error("Was called with arguments {}, {}".format(args, kwargs))
-            self.event_mesage_queue.put(NodeProcessed(from_node=node.name, to_node=None, args=args, kwargs=kwargs,
-                                                      result=None, duration=(time.time() - start_time), error=str(e)))
+            self.events.append(NodeProcessed(from_node=node.name, args=args, kwargs=kwargs,
+                                             result=None, duration=(time.time() - start_time), error=str(e)))
 
         self.logger.info("Node {}({}, {}) resolved to {}".format(node.name, args, kwargs, result))
         next_nodes = []
@@ -63,8 +93,8 @@ class Worker:
                 node = self.get_node_from_next(next_node)
                 next_nodes.append(node)
                 self.queue.put((node, next_node.args, next_node.kwargs))
-        self.event_mesage_queue.put(NodeProcessed(from_node=node.name, to_node=next_nodes, args=args, kwargs=kwargs,
-                                                  result=result, duration=(time.time() - start_time), error=None))
+        self.events.append(NodeProcessed(from_node=node.name, args=args, kwargs=kwargs,
+                                         result=result, duration=(time.time() - start_time), error=None))
 
     def get_node_from_next(self, next_instance):
         node_name = next_instance.node_name

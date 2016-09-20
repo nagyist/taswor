@@ -40,6 +40,9 @@ class NodeProcessed:
 
         return to_return
 
+    def __str__(self):
+        return repr(self.to_dict())
+
 
 class Worker:
     def __init__(self, is_idle_event, queue, queue_lock, nodes, event_list):
@@ -67,33 +70,32 @@ class Worker:
             self.logger.info("Received {}".format(node))
             self.process_node(node, args, kwargs)
 
-    def process_node(self, node, args, kwargs):
+    def process_node(self, current_node, args, kwargs):
         result = None
         start_time = time.time()
         try:
-            result = node.resolve(*args, **kwargs)
+            result = current_node.resolve(*args, **kwargs)
         except Exception as e:
-            self.logger.error("Node {} raised an exception: {}".format(node, e))
+            self.logger.error("Node {} raised an exception: {}".format(current_node, e))
             self.logger.error("Was called with arguments {}, {}".format(args, kwargs))
-            self.events.append(NodeProcessed(from_node=node.name, args=args, kwargs=kwargs,
-                                             result=None, duration=(time.time() - start_time), error=str(e)))
+            self.events.append(NodeProcessed(from_node=current_node.name, args=args, kwargs=kwargs,
+                                             result=[], duration=(time.time() - start_time), error=str(e)))
 
-        self.logger.info("Node {}({}, {}) resolved to {}".format(node.name, args, kwargs, result))
-        next_nodes = []
+        self.logger.info("Node {}({}, {}) resolved to {}".format(current_node.name, args, kwargs, result))
         if result is None:
+            result = []
             self.logger.debug("Node leaf encountered")
         elif isinstance(result, Next):
             # handle result
             node = self.get_node_from_next(result)
-            next_nodes.append(node)
             self.queue.put((node, result.args, result.kwargs))
+            result = [result]
         elif isinstance(result, list):
             for next_node in result:
                 # handle next_node
                 node = self.get_node_from_next(next_node)
-                next_nodes.append(node)
                 self.queue.put((node, next_node.args, next_node.kwargs))
-        self.events.append(NodeProcessed(from_node=node.name, args=args, kwargs=kwargs,
+        self.events.append(NodeProcessed(from_node=current_node.name, args=args, kwargs=kwargs,
                                          result=result, duration=(time.time() - start_time), error=None))
 
     def get_node_from_next(self, next_instance):

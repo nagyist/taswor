@@ -5,9 +5,7 @@ import shutil
 from multiprocessing import Queue, Event, Process, RLock, Manager
 import time
 
-pass
-
-from taswor.util import Next, get_logger
+from taswor.util import Next, get_logger, preprocess_events
 from taswor.node import Node
 from taswor.process.worker import worker_run
 
@@ -78,22 +76,24 @@ class Workflow:
 
     def dump_result_as_html(self, directory):
         template_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", "html")
+        if os.path.exists(directory):
+            shutil.rmtree(directory)
         shutil.copytree(template_dir, directory)
 
-        def get_node(event):
-            name = event.from_node
-            label = name + " (" + repr(event.args) + "," + repr(event.kwargs) + ")"
-            color = "green" if not event.error else "red"
-
-            return label, {"shape": "box", "label": label, "color": color}
+        def get_label(node_name, args, kwargs):
+            args = [str(arg) for arg in args]
+            kwargs = {k: str(v) for k, v in kwargs.items()}
+            arguments = ", ".join(args + ["{}={}".format(k, v) for k, v in kwargs.items()])
+            return node_name + " (" + arguments + ")"
 
         data = {
             "nodes": {},
             "edges": {}
         }
-        for event in self.events:
-            node_name, attrs = get_node(event)
-            data["nodes"][node_name] = attrs
+
+        nodes, edges = preprocess_events(self.events)
+        data["nodes"] = nodes
+        data["edges"] = edges
 
         with open(os.path.join(directory, "data.json"), "w") as data_json:
             data_json.write("data=")
@@ -139,6 +139,7 @@ def test2(*args, **kwargs):
 @node()
 def test3():
     time.sleep(1)
+    raise Exception("test")
 
 
 if __name__ == '__main__':

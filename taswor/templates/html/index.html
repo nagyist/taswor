@@ -8,41 +8,74 @@
     <script src="static/arbor.js"></script>
     <script src="static/graphics.js"></script>
     <script src="static/renderer.js"></script>
+    <script src="static/bootstrap.min.js"></script>
+    <link rel="stylesheet" href="static/bootstrap.min.css">
     <script src="data.json"></script>
+
 </head>
 <body>
+<div class="container" style="overflow: auto;">
+    <div class="col-lg-8 canvas-container">
+        <canvas id="viewport"></canvas>
+    </div>
+    <div class="col-lg-4" style="padding-top: 5%;">
 
-<canvas id="viewport" height="100%" width="75%"></canvas>
+        <h3><span id="node_name" class="text-primary"></span></h3>
 
-<div class="container">
+        <h4 class="text-primary">Called by</h4>
 
-    <h1>Node <span id="node_name">Test</span></h1>
+        <ul id="called-by">
+        </ul>
 
+        <h4 class="text-primary">Created nodes</h4>
+
+        <ul id="created-nodes">
+        </ul>
+
+    </div>
 </div>
 
 <script>
 
-    $("#viewport").attr("width", window.innerWidth * 0.75);
-    $("#viewport").attr("height", window.innerHeight * 0.9);
+    var updateNodeView = function (nodeName, edgesTo, edgesFrom) {
+        $("#node_name").text(nodeName);
+        var calledByUl = $("#called-by");
+        calledByUl.empty();
+
+        var createdNodesUl = $("#created-nodes");
+        createdNodesUl.empty();
+
+        for (var i = 0; i < edgesFrom.length; i++) {
+            var edge = edgesFrom[i];
+            createdNodesUl.append($("<li class='" + ( edge.data.error === null ? "text-success" : "text-danger" ) +
+                    "'>" + edge.target.name + "<ul><li>Duration: " + edge.data.duration + "</li>" +
+                    "<li>Error: " + edge.data.error + "</li>" + "</ul></li>"));
+        }
+
+        for (i = 0; i < edgesTo.length; i++) {
+            edge = edgesTo[i];
+            console.log(edge);
+            calledByUl.append($("<li class='" + ( edge.data.error === null ? "text-success" : "text-danger" ) +
+                    "'>" + edge.source.name + "<ul><li>Duration: " + edge.data.duration + "</li>" +
+                    "<li>Error: " + edge.data.error + "</li>" + "</ul></li>"));
+        }
+    };
+
+    var canvas = $("#viewport");
+    var canvasContainer = $(".canvas-container");
+
+    canvas.attr("width", canvasContainer.width());
+    canvas.attr("height", window.innerHeight);
+    console.log(canvasContainer.width(), canvasContainer.height());
 
     var sys = arbor.ParticleSystem(1, 400, 1);
     sys.parameters({gravity: false});
 
     sys.renderer = Renderer("#viewport");
 
-//    var data = {
-//        nodes: {
-//            animals: {'color': 'red', 'shape': 'box', 'label': 'Animals'},
-//            dog: {'color': 'green', 'shape': 'box', 'label': 'dog'},
-//            cat: {'color': 'blue', 'shape': 'box', 'label': 'cat'}
-//        },
-//        edges: {
-//            animals: {dog: {}, cat: {}}
-//        }
-//    };
     sys.graft(data);
 
-    $("#viewport").mousedown(function (e) {
+    canvas.mousedown(function (e) {
         var pos = $(this).offset();
         var p = {x: e.pageX - pos.left, y: e.pageY - pos.top};
         selected = nearest = dragged = sys.nearest(p);
@@ -50,8 +83,7 @@
         if (selected.node !== null) {
             var edgesFrom = sys.getEdgesFrom(selected.node.name);
             var edgesTo = sys.getEdgesTo(selected.node.name);
-            console.log(edgesFrom);
-            console.log(edgesTo);
+            updateNodeView(selected.node.name, edgesTo, edgesFrom);
         }
         return false;
     });

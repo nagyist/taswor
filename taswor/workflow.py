@@ -4,6 +4,7 @@ import json
 import shutil
 from multiprocessing import Queue, Event, Process, RLock, Manager
 import time
+import copy
 
 from taswor.util import Next, get_logger, preprocess_events
 from taswor.node import Node
@@ -44,8 +45,11 @@ class Workflow:
             if not node.init_generator:
                 self.queue.put((node, (), {}))
             else:
+                node_copy = copy.deepcopy(node)
+                node_copy.init_generator = None
                 for args, kwargs in node.init_generator:
-                    self.queue.put((node, args, kwargs))
+                    print(args, kwargs)
+                    self.queue.put((node_copy, args, kwargs))
 
         if wait:
             self.wait_for_completion()
@@ -109,46 +113,10 @@ class Workflow:
         return all(x)
 
 
-def node(retries=1, start=False, init_args_generator=None):
+def node(retries=1, start=False, init_args=None):
     def decorator(func):
-        node = Node(name=func.__name__, func=func, start=start, init_generator=init_args_generator, retries=retries)
+        node = Node(name=func.__name__, func=func, start=start, init_generator=init_args, retries=retries)
         func.node = node
         return func
 
     return decorator
-
-
-@node(start=True)
-def test():
-    time.sleep(1)
-    return [
-        Next("test2", 1, 2, 3, 10, item="a"),
-        Next("test3"),
-        Next("test2", string="hello world"),
-    ]
-
-
-@node()
-def test2(*args, **kwargs):
-    time.sleep(0.5)
-    print("test2 called with {} and {}".format(args, kwargs))
-    time.sleep(0.25)
-    return Next("test3")
-
-
-@node()
-def test3():
-    time.sleep(1)
-    raise Exception("test")
-
-
-if __name__ == '__main__':
-    workflow = Workflow(
-        test.node, test2.node, test3.node,
-        workers=4
-    )
-
-    workflow.start()
-    workflow.wait_for_completion()
-    workflow.dump_result_as_html("test")
-    workflow.close()

@@ -12,11 +12,17 @@
 </head>
 <body>
 
-<canvas id="viewport" width="800" height="600"></canvas>
+<canvas id="viewport" height="100%" width="75%"></canvas>
+
+<div class="container">
+
+    <h1>Node <span id="node_name">Test</span></h1>
+
+</div>
 
 <script>
 
-    $("#viewport").attr("width", window.innerWidth * 0.9);
+    $("#viewport").attr("width", window.innerWidth * 0.75);
     $("#viewport").attr("height", window.innerHeight * 0.9);
 
     var sys = arbor.ParticleSystem(1, 400, 1);
@@ -42,7 +48,10 @@
         selected = nearest = dragged = sys.nearest(p);
 
         if (selected.node !== null) {
-            console.log(selected.node.name);
+            var edgesFrom = sys.getEdgesFrom(selected.node.name);
+            var edgesTo = sys.getEdgesTo(selected.node.name);
+            console.log(edgesFrom);
+            console.log(edgesTo);
         }
         return false;
     });

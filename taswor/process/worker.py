@@ -12,33 +12,18 @@ def worker_run(*args, **kwargs):
 
 
 class NodeProcessed:
-    def __init__(self, from_node, args, kwargs, result, duration, error):
+    def __init__(self, from_node, from_args, from_kwargs, to_node, to_args, to_kwargs, duration, error):
         self.from_node = from_node
-        self.args = args
-        self.kwargs = kwargs
-        self.result = result
+        self.from_args = from_args
+        self.from_kwargs = from_kwargs
+        self.to_node = to_node
+        self.to_args = to_args
+        self.to_kwargs = to_kwargs
         self.duration = duration
         self.error = error
 
     def to_dict(self):
-        to_return = {
-            "from": self.from_node,
-            "to": [],
-            "args": self.args,
-            "kwargs": self.kwargs,
-            "duration": self.duration,
-            "error": self.error
-        }
-        if self.result is None:
-            to_return["to"] = None
-            return to_return
-        elif not isinstance(self.result, list):
-            self.result = [self.result]
-
-        for item in self.result:
-            to_return["to"].append({"name": item.node_name, "args": item.args, "kwargs": item.kwargs})
-
-        return to_return
+        return self.__dict__
 
     def __str__(self):
         return repr(self.to_dict())
@@ -78,25 +63,50 @@ class Worker:
         except Exception as e:
             self.logger.error("Node {} raised an exception: {}".format(current_node, e))
             self.logger.error("Was called with arguments {}, {}".format(args, kwargs))
-            self.events.append(NodeProcessed(from_node=current_node.name, args=args, kwargs=kwargs,
-                                             result=[], duration=(time.time() - start_time), error=str(e)))
+            self.register_event((current_node.name, args, kwargs), None, time.time() - start_time, str(e))
+            return
 
         self.logger.info("Node {}({}, {}) resolved to {}".format(current_node.name, args, kwargs, result))
         if result is None:
-            result = []
             self.logger.debug("Node leaf encountered")
+            self.register_event((current_node.name, args, kwargs), None, time.time() - start_time, None)
         elif isinstance(result, Next):
             # handle result
             node = self.get_node_from_next(result)
             self.queue.put((node, result.args, result.kwargs))
-            result = [result]
+            self.register_event((current_node.name, args, kwargs), (node.name, result.args, result.kwargs),
+                                time.time() - start_time, None)
         elif isinstance(result, list):
             for next_node in result:
                 # handle next_node
                 node = self.get_node_from_next(next_node)
                 self.queue.put((node, next_node.args, next_node.kwargs))
-        self.events.append(NodeProcessed(from_node=current_node.name, args=args, kwargs=kwargs,
-                                         result=result, duration=(time.time() - start_time), error=None))
+
+                self.register_event((current_node.name, args, kwargs), (node.name, next_node.args, next_node.kwargs),
+                                    time.time() - start_time, None)
+
+    def register_event(self, current_node, next_node, duration, error=None):
+        """
+
+        :param current_node: a tuple (str, list/tuple, dict) representing (current_node_name, args, kwargs)
+        :param next_node: a tuple (str, list/tuple, dict) representing (next_node_name, args, kwargs)
+        :param duration: a float representing how many seconds the processing lasted
+        :param error: None or a str representing an error message
+        :return:
+        """
+        if not next_node:
+            to_name = None
+            to_args = None
+            to_kwargs = None
+        else:
+            to_name = next_node[0]
+            to_args = next_node[1]
+            to_kwargs = next_node[2]
+
+        self.events.append(
+            NodeProcessed(from_node=current_node[0], from_args=current_node[1], from_kwargs=current_node[2],
+                          to_node=to_name, to_args=to_args, to_kwargs=to_kwargs,
+                          duration=duration, error=error))
 
     def get_node_from_next(self, next_instance):
         node_name = next_instance.node_name

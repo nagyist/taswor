@@ -30,44 +30,48 @@ def get_logger(name=None):
 
 def preprocess_events(event_list):
     def get_label(node_name, args, kwargs):
-        args = [str(arg) for arg in args]
-        kwargs = {k: str(v) for k, v in kwargs.items()}
+        if not node_name:
+            return "leaf_node (stop)"
+        args = [str(arg) for arg in args] if args else []
+        kwargs = {k: str(v) for k, v in kwargs.items()} if kwargs else {}
         arguments = ", ".join(args + ["{}={}".format(k, v) for k, v in kwargs.items()])
         return node_name + " (" + arguments + ")"
 
-    def check_if_edge(node1, node2, events):
-        node1_name = node1["name"]
-        node2_name = node2["name"]
-
-        for event in events:
-            if event.from_node == node1_name:
-                for item in event.result:
-                    if item.node_name == node2_name:
-                        # possible match
-                        return node1["args"] == event.args and node1["kwargs"] == event.kwargs \
-                               and item.args == node2["args"] and item.kwargs == node2["kwargs"]
-
-    nodes = []
+    nodes = {}
     edges = {}
 
-    # initial identification of nodes
+    # get edges and nodes
     for event in event_list:
-        nodes.append({"name": event.from_node, "args": event.args, "kwargs": event.kwargs,
-                      "label": get_label(event.from_node, event.args, event.kwargs), "shape": "box", "color": "green"})
+        current_node = event.from_node
+        current_args = event.from_args
+        current_kwargs = event.from_kwargs
 
-    nodes_unique = []
-    for item in nodes:
-        if len([n for n in nodes_unique if n["label"] == item["label"]]) == 0:
-            nodes_unique.append(item)
-    nodes = nodes_unique
+        next_node = event.to_node
+        next_args = event.to_args
+        next_kwargs = event.to_kwargs
 
-    # create edges
-    for node1, node2 in itertools.product(nodes, repeat=2):
-        print(node1["label"], node2["label"])
-        if check_if_edge(node1, node2, event_list):
-            if node1["name"] in edges:
-                edges[node1["name"]][node2["name"]] = {"directed": True}
-            else:
-                edges[node1["name"]] = {node2["name"]: {"directed": True}}
+        duration = event.duration
+        error = event.error
+
+        current_label = get_label(current_node, current_args, current_kwargs)
+        next_label = get_label(next_node, next_args, next_kwargs)
+
+        if current_label in edges:
+            edges[current_label][next_label] = {"directed": True, "duration": duration, "error": error,
+                                                "color": "red" if error else "green"}
+        else:
+            edges[current_label] = {
+                next_label: {
+                    "directed": True, "duration": duration, "error": error,
+                    "color": "red" if error else "green"
+                }
+            }
+
+        if current_label not in nodes:
+            nodes[current_label] = {"label": current_label, "shape": "box", "color": "blue"}
+        if next_label == "leaf_node (stop)":
+            nodes[next_label] = {"label": next_label, "shape": "box", "color": "red"}
+
+    print(nodes, edges)
 
     return nodes, edges

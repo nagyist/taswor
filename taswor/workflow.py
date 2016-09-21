@@ -96,8 +96,8 @@ class Workflow:
         data["edges"] = edges
 
         with open(os.path.join(directory, "data.json"), "w") as data_json:
-            data_json.write("data=")
-            data_json.write(json.dumps(data))
+            data_json.write("var data = ")
+            data_json.write(json.dumps(data, indent=4))
             data_json.write(";")
 
     def _get_start_nodes(self):

@@ -4,7 +4,17 @@ import itertools
 
 
 class Next:
+    """
+    A class that encapsulates information for the workflow about what nodes must be processed next.
+    """
+
     def __init__(self, node_name, *args, **kwargs):
+        """
+        :param node_name: The name of the node to be processed next
+        :param args: The args for the node that will be processed
+        :param kwargs: The kwargs for the node that will be processed
+
+        """
         self.node_name = node_name
         self.args = args
         self.kwargs = kwargs
@@ -57,35 +67,27 @@ def preprocess_events(event_list):
         next_label = get_label(next_node, next_args, next_kwargs)
 
         if not next_label:
+            # leaf node or error
             if current_label not in nodes:
                 nodes[current_label] = {"label": current_label, "shape": "box",
-                                        "color": "yellow" if not error else "red"}
+                                        "color": "yellow" if not error else "red", "error": error, "duration": duration}
             continue
 
+        if current_label not in nodes:
+            nodes[current_label] = {"label": current_label, "shape": "box", "color": "blue", "error": error,
+                                    "duration": duration}
+
         if current_label in edges:
-            edges[current_label][next_label] = {"directed": True, "duration": duration, "error": error,
-                                                "color": "red" if error else "green"}
+            edges[current_label][next_label] = {"directed": True}
         else:
             edges[current_label] = {
-                next_label: {
-                    "directed": True, "duration": duration, "error": error,
-                    "color": "red" if error else "green"
-                }
+                next_label: {"directed": True}
             }
 
-        if current_label not in nodes:
-            nodes[current_label] = {"label": current_label, "shape": "box", "color": "blue"}
-
-    # color the first nodes in green
+    # color the start nodes in green
     first_node = event_list[0].from_node
     for node in nodes:
         if node.startswith(first_node):
             nodes[node]["color"] = "green"
-
-    # color the error nodes in red
-    # for source_node in edges:
-    #     for target_node in edges[source_node]:
-    #         if edges[source_node][target_node]["error"]:
-    #             nodes["source_node"]["color"] = "red"
 
     return nodes, edges

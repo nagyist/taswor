@@ -47,12 +47,12 @@
 
 <script>
 
-    var updateNodeView = function (nodeObeject, edgesTo, edgesFrom) {
-        $("#node_name").text(nodeObeject.name);
-        $("#node_error").text(nodeObeject.data.error);
-        $("#node_duration").text(nodeObeject.data.duration);
+    var updateNodeView = function (nodeObject, edgesTo, edgesFrom) {
+        $("#node_name").text(nodeObject.name);
+        $("#node_error").text(nodeObject.data.error !== null ? nodeObject.data.error : "");
+        $("#node_duration").text(nodeObject.data.duration);
 
-        if (nodeObeject.error !== null) {
+        if (nodeObject.data.error !== null) {
             $(".info-panel").addClass("text-danger");
         }
         else {

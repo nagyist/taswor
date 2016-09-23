@@ -33,6 +33,7 @@ class Workflow:
 
         self.manager = Manager()
         self.events = self.manager.list()
+        self.cache = self.manager.dict()
 
         if not cache_url:
             self.logger.warning("No cache backend supplied. Results will not be cached and may have a serious "
@@ -43,7 +44,7 @@ class Workflow:
         self.logger.info("Starting workers")
         self.workers = [
             Process(target=worker_run,
-                    args=(self.is_idle[i], self.queue, self.queue_lock, self.nodes, self.events),
+                    args=(self.is_idle[i], self.queue, self.queue_lock, self.nodes, self.events, self.cache),
                     name="worker-{}".format(i))
             for i in range(workers)]
 
@@ -147,18 +148,18 @@ class Workflow:
         return all(x)
 
 
-def node(retries=1, start=False, init_args=None):
+def node(start=False, init_args=None, use_cache=True):
     """
     Decorator for defining a valid Node body.
 
-    :param retries: ``NotImplemented``
     :param start: if True, the node will be treated as a starting node and will be processed first.
     :param init_args: A list of tuples of (tuple, dict) representing the ``args`` and ``kwargs`` for the current \
     start node. If not given, the start node will be processed with no arguments.
+    :param use_cache: ``NotImplemented``
     """
 
     def decorator(func):
-        node = Node(name=func.__name__, func=func, start=start, init_generator=init_args, retries=retries)
+        node = Node(name=func.__name__, func=func, start=start, init_generator=init_args, use_cache=use_cache)
         func.node = node
         return func
 

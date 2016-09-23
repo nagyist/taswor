@@ -1,6 +1,4 @@
-
 class Storage:
-
     def put(self, key, value):
         pass
 

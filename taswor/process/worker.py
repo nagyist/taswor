@@ -30,12 +30,13 @@ class NodeProcessed:
 
 
 class Worker:
-    def __init__(self, is_idle_event, queue, queue_lock, nodes, event_list):
+    def __init__(self, is_idle_event, queue, queue_lock, nodes, event_list, cache):
         self.is_idle_event = is_idle_event
         self.queue = queue
         self.queue_lock = queue_lock
         self.nodes = nodes
         self.events = event_list
+        self.cache = cache
 
         self.worker_process = multiprocessing.current_process()
         self.logger = get_logger("Worker ".format(self.worker_process.name))
@@ -57,6 +58,16 @@ class Worker:
 
     def process_node(self, current_node, args, kwargs):
         result = None
+
+        if current_node.use_cache:
+            # try searching in cache
+            cache_key = "{}_{}_{}".format(current_node.name, args, kwargs)
+            if cache_key in self.cache:
+                # cache hit, save the cached result and return
+                self.logger.info("Cached value {} ( {}, {} )".format(current_node.name, args, kwargs))
+                self.process_result(self.cache[cache_key], current_node, args, kwargs, time.time())
+                return
+
         start_time = time.time()
         try:
             result = current_node.resolve(*args, **kwargs)
@@ -67,6 +78,14 @@ class Worker:
             return
 
         self.logger.info("Node {}({}, {}) resolved to {}".format(current_node.name, args, kwargs, result))
+        if current_node.use_cache:
+            self.logger.info("Cache the result value")
+            self.cache["{}_{}_{}".format(current_node.name, args, kwargs)] = result
+
+
+        self.process_result(result, current_node, args, kwargs, start_time)
+
+    def process_result(self, result, current_node, args, kwargs, start_time):
         if result is None:
             self.logger.debug("Node leaf encountered")
             self.register_event((current_node.name, args, kwargs), None, time.time() - start_time, None)

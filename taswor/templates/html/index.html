@@ -88,7 +88,7 @@
     canvas.attr("height", window.innerHeight);
     console.log(canvasContainer.width(), canvasContainer.height());
 
-    var sys = arbor.ParticleSystem(0, 100, 0);
+    var sys = arbor.ParticleSystem(50, 100, 5);
     sys.parameters({gravity: false});
 
     sys.renderer = Renderer("#viewport");

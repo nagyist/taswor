@@ -33,7 +33,7 @@ Firstly, a minimal example is the following::
 
 
     @node()
-    def multiply_by_two(number):
+    def divide_by_zero(number):
         number = number // 0
 
     @node()
@@ -43,7 +43,7 @@ Firstly, a minimal example is the following::
 
     if __name__ == '__main__':
         workflow = Workflow(
-            initialisation.node, add_one.node, multiply_by_two.node, store_result.node
+            initialisation.node, add_one.node, divide_by_zero.node, store_result.node
         )
         workflow.start()
         workflow.wait_for_completion()
@@ -65,4 +65,46 @@ the node processing.
 Real-life example
 -----------------
 
-Let's assume we have a batch of images and we want to move them to certain directories, depending on its extension.
+Let's assume we have a cluster of servers and we want to check if they have a running HTTP server on port 80::
+
+    import os
+    import urllib.request
+    from taswor.workflow import Workflow, node
+    from taswor.util import Next
+
+    machines = [
+        (("192.168.0.1",), {}),
+        (("192.168.0.100",), {}),
+        (("192.168.0.101",), {})
+    ]
+
+
+    @node(start=True, init_args=machines)
+    def check_alive(ip):
+        status = os.system("ping -n 1 {}".format(ip))
+        if status != 0:
+            raise ConnectionRefusedError("Unable to ping machine {}".format(ip))
+        return Next("check_if_port_open", ip, 80)
+
+
+    @node()
+    def check_if_port_open(host, port):
+        try:
+            urllib.request.urlopen("http://{}:{}".format(host, port))
+        except urllib.request.HTTPError:
+            return
+
+
+    if __name__ == '__main__':
+        workflow = Workflow(check_alive.node, check_if_port_open.node)
+        workflow.start()
+        workflow.wait_for_completion()
+        workflow.dump_result_as_html("result")
+        workflow.close()
+
+This code will produce:
+
+.. image:: complex_example.png
+
+.. note::
+    Complex workflows with many nodes will produce graphs that will be harder to comprehend and understand.
